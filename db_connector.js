@@ -2,15 +2,15 @@
 import mysql from 'mysql2/promise';
 import * as dotenv from 'dotenv';
 
-// Load environment variables from .env.local
-dotenv.config({ path: './.env.local' });
+// Load environment variables (Railway sets them automatically)
+dotenv.config();
 
-// Use environment variables or fallback defaults
-const DB_USER = process.env.DB_USER || 'spiritmarketuser';
-const DB_PASS = process.env.DB_PASS || 'password123';
-const DB_NAME = process.env.DB_NAME || 'spiritmarket';
-const DB_HOST = process.env.DB_HOST || '127.0.0.1';
-const DB_PORT = process.env.DB_PORT || 3306;
+// DB configuration from Railway
+const DB_USER = process.env.MYSQLUSER || 'root';
+const DB_PASS = process.env.MYSQLPASSWORD || 'stOrhLwjOHJhKxtEgaQSGSCSbCTlFqfx';
+const DB_NAME = process.env.MYSQLDATABASE || 'railway';
+const DB_HOST = process.env.MYSQLHOST || 'mysql.railway.internal';
+const DB_PORT = process.env.MYSQLPORT || 3306;
 
 // Create a connection pool
 const pool = mysql.createPool({
@@ -35,4 +35,3 @@ pool.getConnection()
     });
 
 export default pool;
-
