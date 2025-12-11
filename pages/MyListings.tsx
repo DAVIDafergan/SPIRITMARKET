@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react'; // **התיקון כאן**
 import { Link, useNavigate } from 'react-router-dom';
-import { Edit, Trash2, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { Edit, Trash2, X, AlertTriangle, Loader2, PlusCircle, Eye } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,7 +40,7 @@ const StatusBadge: React.FC<{ status: ListingStatus }> = ({ status }) => {
   const { t } = useLanguage();
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white ${colorClass}`}>
-      {t.listing.status?.[status.toLowerCase()] || text}
+      {t.myListings.status?.[status.toLowerCase()] || text} 
     </span>
   );
 };
@@ -48,7 +48,7 @@ const StatusBadge: React.FC<{ status: ListingStatus }> = ({ status }) => {
 
 const MyListings: React.FC = () => {
   const { user } = useAuth();
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const { showToast } = useToast();
   const navigate = useNavigate();
   
@@ -174,7 +174,7 @@ const MyListings: React.FC = () => {
 
               <div className="flex items-center text-sm text-gray-400 space-x-4">
                 <span dir="ltr" className="flex items-center">
-                  <Loader2 size={16} className="text-gray-500 mr-1" /> 
+                  <Eye size={16} className="text-gray-500 mr-1" /> 
                   {listing.viewCount} {t.detail.viewCount}
                 </span>
                 <span>{new Date(listing.createdAt).toLocaleDateString(language)}</span>

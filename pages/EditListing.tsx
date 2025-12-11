@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { Loader2, Zap, CheckCircle, AlertTriangle, XCircle, ChevronDown, Check } from 'lucide-react';
+import { Loader2, Check, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,7 +13,8 @@ import { categories } from './CreateListing'; // נניח שאתה משתמש ב
 const fetchListingData = async (id: string | undefined): Promise<Listing | null> => {
     if (!id) return null;
     try {
-        const listing = await Api.getListingById(id);
+        // שימוש ב-view endpoint כדי לקבל נתונים
+        const listing = await Api.getListingById(id); 
         return listing || null;
     } catch (error) {
         console.error("Failed to fetch listing:", error);
