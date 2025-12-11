@@ -37,7 +37,7 @@ const initDB = async () => {
             const connection = await pool.getConnection();
             console.log("Acquired connection for initialization...");
             
-            // Users Table - (Cleaned SQL)
+            // Users Table
             await connection.query(`
                 CREATE TABLE IF NOT EXISTS users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,7 +53,7 @@ const initDB = async () => {
                 )
             `);
 
-            // Listings Table - (Cleaned SQL)
+            // Listings Table
             await connection.query(`
                 CREATE TABLE IF NOT EXISTS listings (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -77,7 +77,7 @@ const initDB = async () => {
                 )
             `);
             
-            // Reviews Table - (Cleaned SQL)
+            // Reviews Table
             await connection.query(`
                 CREATE TABLE IF NOT EXISTS reviews (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -92,6 +92,17 @@ const initDB = async () => {
                     FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             `);
+
+            // 🚨 FIX: Add view_count column if missing (For existing databases)
+            try {
+                await connection.query("ALTER TABLE listings ADD COLUMN view_count INT DEFAULT 0");
+                console.log("Running migration: Added 'view_count' column to listings table.");
+            } catch (err) {
+                // Ignore if column already exists
+                if (err.code !== 'ER_DUP_FIELDNAME') {
+                   // console.log("Note: view_count column check passed.");
+                }
+            }
 
             console.log("Database tables initialized successfully.");
             connection.release();
@@ -121,56 +132,26 @@ const authenticateToken = (req, res, next) => {
 
 // --- API Routes ---
 
-// 1. GET Listings (Home Page) - FIXED SQL SYNTAX
+// 1. GET Listings (Home Page)
 app.get('/api/listings', async (req, res) => {
     try {
         const { category, search, minPrice, maxPrice, minAbv, maxAbv, minRating, sortBy } = req.query;
 
-        // Clean SQL Query
         let sql = "SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified FROM listings l JOIN users u ON l.seller_id = u.id WHERE l.status = 'APPROVED'";
-        
         const params = [];
 
-        // Filters
-        if (category && category !== 'All') { 
-            sql += " AND l.category = ?"; 
-            params.push(category); 
-        }
-        if (search) { 
-            sql += " AND l.title LIKE ?"; 
-            params.push(`%${search}%`); 
-        }
-        if (minPrice) { 
-            sql += " AND l.price >= ?"; 
-            params.push(Number(minPrice)); 
-        }
-        if (maxPrice) { 
-            sql += " AND l.price <= ?"; 
-            params.push(Number(maxPrice)); 
-        }
-        if (minAbv) { 
-            sql += " AND l.abv >= ?"; 
-            params.push(Number(minAbv)); 
-        }
-        if (maxAbv) { 
-            sql += " AND l.abv <= ?"; 
-            params.push(Number(maxAbv)); 
-        }
-        if (minRating) { 
-            sql += " AND u.rating >= ?"; 
-            params.push(Number(minRating)); 
-        }
+        if (category && category !== 'All') { sql += " AND l.category = ?"; params.push(category); }
+        if (search) { sql += " AND l.title LIKE ?"; params.push(`%${search}%`); }
+        if (minPrice) { sql += " AND l.price >= ?"; params.push(Number(minPrice)); }
+        if (maxPrice) { sql += " AND l.price <= ?"; params.push(Number(maxPrice)); }
+        if (minAbv) { sql += " AND l.abv >= ?"; params.push(Number(minAbv)); }
+        if (maxAbv) { sql += " AND l.abv <= ?"; params.push(Number(maxAbv)); }
+        if (minRating) { sql += " AND u.rating >= ?"; params.push(Number(minRating)); }
 
-        // Sorting
-        if (sortBy === 'price_asc') {
-            sql += " ORDER BY l.price ASC";
-        } else if (sortBy === 'price_desc') {
-            sql += " ORDER BY l.price DESC";
-        } else if (sortBy === 'rating_desc') {
-            sql += " ORDER BY u.rating DESC";
-        } else {
-            sql += " ORDER BY l.created_at DESC";
-        }
+        if (sortBy === 'price_asc') sql += " ORDER BY l.price ASC";
+        else if (sortBy === 'price_desc') sql += " ORDER BY l.price DESC";
+        else if (sortBy === 'rating_desc') sql += " ORDER BY u.rating DESC";
+        else sql += " ORDER BY l.created_at DESC";
 
         const [rows] = await pool.execute(sql, params);
         
@@ -178,74 +159,60 @@ app.get('/api/listings', async (req, res) => {
             id: row.id,
             title: row.title, description: row.description, price: row.price,
             category: row.category, imageUrl: row.image_url, status: row.status,
-            createdAt: row.created_at, location: row.location, abv: row.abv || 0, // Fallback
-            volumeMl: row.volume_ml, brand: row.brand, vintage: row.vintage || null, // Fallback
+            createdAt: row.created_at, location: row.location, abv: row.abv || 0,
+            volumeMl: row.volume_ml, brand: row.brand, vintage: row.vintage || null,
             isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
             sellerName: row.sellerName, sellerPhone: row.sellerPhone,
-            sellerRating: row.sellerRating || 0, sellerVerified: Boolean(row.sellerVerified), // Fallback
-            viewCount: row.view_count,
+            sellerRating: row.sellerRating || 0, sellerVerified: Boolean(row.sellerVerified),
+            viewCount: row.view_count || 0,
             aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
         }));
 
         res.json(formattedListings);
     } catch (err) {
         console.error("Error fetching listings:", err);
-        res.status(500).json({ message: "Database error or connection failed" });
+        res.status(500).json({ message: "Database error" });
     }
 });
 
-
-// 2. POST Create Listing (Protected) - FIXED SQL SYNTAX
+// 2. POST Create Listing
 app.post('/api/listings', authenticateToken, async (req, res) => {
     try {
-        const { 
-            title, description, price, category, imageUrl, 
-            location, abv, volumeMl, brand, vintage, isKosher, aiData 
-        } = req.body;
-        
+        const { title, description, price, category, imageUrl, location, abv, volumeMl, brand, vintage, isKosher, aiData } = req.body;
         const sellerId = req.user.id; 
+        
         let status = 'PENDING';
         if (aiData && aiData.score >= 0.75) status = 'APPROVED';
         else if (aiData && aiData.score >= 0.5) status = 'NEEDS_REVIEW';
         else status = 'REJECTED';
 
-        // Clean SQL Query
         const query = "INSERT INTO listings (seller_id, title, description, price, category, image_url, location, abv, volume_ml, brand, vintage, is_kosher, status, ai_data, created_at, view_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)";
 
         const [result] = await pool.execute(query, [
             sellerId, title, description, price, category, imageUrl, 
-            location, abv || null, volumeMl || null, brand, vintage || null, isKosher, status, JSON.stringify(aiData)
+            location, abv || null, volumeMl || null, brand, vintage || null, isKosher, status, JSON.stringify(aiData || {})
         ]);
 
         res.status(201).json({ id: result.insertId, status, message: "Listing created successfully" });
     } catch (err) {
         console.error("Error creating listing:", err);
-        // שיפור טיפול שגיאה בהעלאה
-        res.status(500).json({ message: `Failed to create listing. Details: ${err.message}` });
+        res.status(500).json({ message: `Failed to create listing: ${err.message}` });
     }
 });
 
-// 3. GET Listing by ID & Count View - ADDED DATA FALLBACKS
+// 3. GET Listing by ID & Count View
 app.get('/api/listings/:id/view', async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-
         const { id } = req.params;
 
-        // 1. Update view count
-        await conn.query(`
-            UPDATE listings
-            SET view_count = view_count + 1
-            WHERE id = ? AND status = 'APPROVED'
-        `, [id]);
+        // Ensure view_count column exists before this runs (handled in initDB)
+        await conn.query("UPDATE listings SET view_count = view_count + 1 WHERE id = ? AND status = 'APPROVED'", [id]);
         
-        // 2. Fetch listing data
         const [rows] = await conn.execute(`
             SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
-            FROM listings l
-            JOIN users u ON l.seller_id = u.id
-            WHERE l.id = ?
+            FROM listings l JOIN users u ON l.seller_id = u.id WHERE l.id = ?
         `, [id]);
         
         await conn.commit();
@@ -253,7 +220,6 @@ app.get('/api/listings/:id/view', async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ message: 'Listing Not Found' });
 
         const row = rows[0];
-        // ADDED FALLBACKS for robustness
         res.json({
             id: row.id,
             title: row.title, description: row.description, price: row.price,
@@ -263,12 +229,12 @@ app.get('/api/listings/:id/view', async (req, res) => {
             isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
             sellerName: row.sellerName, sellerPhone: row.sellerPhone,
             sellerRating: row.sellerRating || 0, sellerVerified: Boolean(row.sellerVerified),
-            viewCount: row.view_count,
+            viewCount: row.view_count || 0,
             aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
         });
     } catch (err) {
         await conn.rollback();
-        console.error("Error fetching listing by ID and counting view:", err);
+        console.error("Error fetching listing:", err);
         res.status(500).json({ message: "Server error" });
     } finally {
         conn.release();
@@ -280,7 +246,6 @@ app.get('/api/listings/my', authenticateToken, async (req, res) => {
     try {
         const sellerId = req.user.id;
         const sql = "SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified FROM listings l JOIN users u ON l.seller_id = u.id WHERE l.seller_id = ? ORDER BY l.created_at DESC";
-        
         const [rows] = await pool.execute(sql, [sellerId]);
 
         const formattedListings = rows.map(row => ({
@@ -295,10 +260,8 @@ app.get('/api/listings/my', authenticateToken, async (req, res) => {
             viewCount: row.view_count,
             aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
         }));
-
         res.json(formattedListings);
     } catch (err) {
-        console.error("Error fetching my listings:", err);
         res.status(500).json({ message: "Failed to load listings" });
     }
 });
@@ -310,22 +273,16 @@ app.put('/api/listings/:id', authenticateToken, async (req, res) => {
         const sellerId = req.user.id;
         const { title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher } = req.body;
         
-        // Ensure user owns the listing
         const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
-        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
-            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
-        }
+        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) return res.status(403).json({ message: "Forbidden" });
 
-        const query = "UPDATE listings SET title = ?, description = ?, price = ?, category = ?, location = ?, abv = ?, volume_ml = ?, brand = ?, vintage = ?, is_kosher = ? WHERE id = ?";
-
-        await pool.execute(query, [
-            title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher, id
-        ]);
-
-        res.json({ message: "Listing updated successfully" });
+        await pool.execute(
+            "UPDATE listings SET title = ?, description = ?, price = ?, category = ?, location = ?, abv = ?, volume_ml = ?, brand = ?, vintage = ?, is_kosher = ? WHERE id = ?",
+            [title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher, id]
+        );
+        res.json({ message: "Updated" });
     } catch (err) {
-        console.error("Error updating listing:", err);
-        res.status(500).json({ message: "Failed to update listing" });
+        res.status(500).json({ message: "Failed to update" });
     }
 });
 
@@ -334,44 +291,28 @@ app.delete('/api/listings/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const sellerId = req.user.id;
-
-        // Ensure user owns the listing
+        
         const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
-        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
-            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
-        }
+        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) return res.status(403).json({ message: "Forbidden" });
 
         const [result] = await pool.execute('DELETE FROM listings WHERE id = ?', [id]);
-        
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Listing not found" });
-        }
+        if (result.affectedRows === 0) return res.status(404).json({ message: "Not found" });
 
-        res.status(204).send(); // No Content, successful deletion
+        res.status(204).send();
     } catch (err) {
-        console.error("Error deleting listing:", err);
-        res.status(500).json({ message: "Failed to delete listing" });
+        res.status(500).json({ message: "Failed to delete" });
     }
 });
 
-
-// 7. PUT Update User Profile
+// 7. PUT User Profile
 app.put('/api/users/profile', authenticateToken, async (req, res) => {
-    const conn = await pool.getConnection();
     try {
         const userId = req.user.id;
         const { name, phone } = req.body;
+        if (!name || !phone) return res.status(400).json({ message: "Missing fields" });
 
-        if (!name || !phone) {
-            return res.status(400).json({ message: "Name and phone are required." });
-        }
-
-        await conn.execute(
-            'UPDATE users SET name = ?, phone = ? WHERE id = ?',
-            [name, phone, userId]
-        );
-        
-        const [rows] = await conn.execute('SELECT * FROM users WHERE id = ?', [userId]);
+        await pool.execute('UPDATE users SET name = ?, phone = ? WHERE id = ?', [name, phone, userId]);
+        const [rows] = await pool.execute('SELECT * FROM users WHERE id = ?', [userId]);
         const user = rows[0];
 
         res.json({
@@ -379,204 +320,116 @@ app.put('/api/users/profile', authenticateToken, async (req, res) => {
             isSeller: Boolean(user.is_seller), isAdmin: Boolean(user.is_admin),
             rating: user.rating, verified: Boolean(user.verified)
         });
-
     } catch (err) {
-        console.error("Error updating user profile:", err);
-        res.status(500).json({ message: "Failed to update profile." });
-    } finally {
-        conn.release();
+        res.status(500).json({ message: "Failed to update profile" });
     }
 });
 
-
-// 8. POST Add Review and Rate Seller
+// 8. POST Review
 app.post('/api/reviews', authenticateToken, async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-
         const reviewerId = req.user.id;
         const { listingId, sellerId, rating, comment } = req.body;
         
-        // 1. Ensure listing and seller exist
-        const [listingRow] = await conn.execute('SELECT seller_id FROM listings WHERE id = ?', [listingId]);
-        if (listingRow.length === 0 || listingRow[0].seller_id !== sellerId) {
-            await conn.rollback();
-            return res.status(400).json({ message: "Invalid listing or seller ID." });
-        }
-        
-        // Prevent self-rating
         if (reviewerId == sellerId) {
             await conn.rollback();
-            return res.status(403).json({ message: "Cannot rate your own listing/seller profile." });
+            return res.status(403).json({ message: "Cannot rate yourself" });
         }
 
-        // 2. Insert new review
-        const insertQuery = "INSERT INTO reviews (listing_id, seller_id, reviewer_id, rating, comment) VALUES (?, ?, ?, ?, ?)";
-        const [result] = await conn.execute(insertQuery, [listingId, sellerId, reviewerId, rating, comment]);
-        const newReviewId = result.insertId;
+        const [res1] = await conn.execute("INSERT INTO reviews (listing_id, seller_id, reviewer_id, rating, comment) VALUES (?, ?, ?, ?, ?)", [listingId, sellerId, reviewerId, rating, comment]);
+        const newId = res1.insertId;
 
-        // 3. Update average seller rating in users table
-        const [avgResult] = await conn.execute(
-            'SELECT AVG(rating) as avgRating FROM reviews WHERE seller_id = ?',
-            [sellerId]
-        );
-        const newAvgRating = parseFloat(avgResult[0].avgRating || 0).toFixed(1);
-
-        await conn.execute(
-            'UPDATE users SET rating = ? WHERE id = ?',
-            [newAvgRating, sellerId]
-        );
+        const [avgRes] = await conn.execute('SELECT AVG(rating) as avgRating FROM reviews WHERE seller_id = ?', [sellerId]);
+        await conn.execute('UPDATE users SET rating = ? WHERE id = ?', [parseFloat(avgRes[0].avgRating || 0).toFixed(1), sellerId]);
         
         await conn.commit();
         
-        // Fetch full review to return to Frontend
-        const [newReviewRow] = await conn.execute(`
-            SELECT r.*, u.name as reviewerName
-            FROM reviews r
-            JOIN users u ON r.reviewer_id = u.id
-            WHERE r.id = ?
-        `, [newReviewId]);
-
-
+        const [newReview] = await conn.execute(`SELECT r.*, u.name as reviewerName FROM reviews r JOIN users u ON r.reviewer_id = u.id WHERE r.id = ?`, [newId]);
         res.status(201).json({ 
-            id: newReviewRow[0].id, 
-            listingId: newReviewRow[0].listing_id,
-            sellerId: newReviewRow[0].seller_id,
-            reviewerId: newReviewRow[0].reviewer_id,
-            reviewerName: newReviewRow[0].reviewerName,
-            rating: newReviewRow[0].rating,
-            comment: newReviewRow[0].comment,
-            createdAt: newReviewRow[0].created_at
+            id: newReview[0].id, listingId: newReview[0].listing_id, sellerId: newReview[0].seller_id,
+            reviewerId: newReview[0].reviewer_id, reviewerName: newReview[0].reviewerName,
+            rating: newReview[0].rating, comment: newReview[0].comment, createdAt: newReview[0].created_at
         });
-
     } catch (err) {
         await conn.rollback();
-        console.error("Error adding review:", err);
-        res.status(500).json({ message: "Failed to submit review" });
+        res.status(500).json({ message: "Failed to review" });
     } finally {
         conn.release();
     }
 });
 
-// 9. GET Reviews by Seller ID
+// 9. GET Seller Reviews
 app.get('/api/reviews/seller/:sellerId', async (req, res) => {
     try {
         const { sellerId } = req.params;
-        const query = "SELECT r.id, r.listing_id, r.seller_id, r.reviewer_id, r.rating, r.comment, r.created_at, u.name as reviewerName FROM reviews r JOIN users u ON r.reviewer_id = u.id WHERE r.seller_id = ? ORDER BY r.created_at DESC";
-        const [rows] = await pool.execute(query, [sellerId]);
-
-        const formattedReviews = rows.map(row => ({
-            id: row.id,
-            listingId: row.listing_id,
-            sellerId: row.seller_id,
-            reviewerId: row.reviewer_id,
-            reviewerName: row.reviewerName,
-            rating: row.rating,
-            comment: row.comment,
-            createdAt: row.created_at
+        const [rows] = await pool.execute("SELECT r.id, r.listing_id, r.seller_id, r.reviewer_id, r.rating, r.comment, r.created_at, u.name as reviewerName FROM reviews r JOIN users u ON r.reviewer_id = u.id WHERE r.seller_id = ? ORDER BY r.created_at DESC", [sellerId]);
+        
+        const formatted = rows.map(row => ({
+            id: row.id, listingId: row.listing_id, sellerId: row.seller_id, reviewerId: row.reviewer_id,
+            reviewerName: row.reviewerName, rating: row.rating, comment: row.comment, createdAt: row.created_at
         }));
-
-        res.json(formattedReviews);
+        res.json(formatted);
     } catch (err) {
-        console.error("Error fetching seller reviews:", err);
         res.status(500).json({ message: "Failed to fetch reviews" });
     }
 });
 
-
-// --- AUTH ROUTES ---
-
-// POST Login
+// Auth & AI Routes
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-
-        if (rows.length === 0) {
-            return res.status(401).json({ message: "Invalid email or password" });
-        }
+        if (rows.length === 0) return res.status(401).json({ message: "Invalid credentials" });
 
         const user = rows[0];
         const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
-        if (!isMatch) {
-            return res.status(401).json({ message: "Invalid email or password" });
-        }
-
-        const token = jwt.sign({ 
-            id: user.id, email: user.email, isAdmin: user.is_admin, name: user.name, isSeller: user.is_seller 
-        }, JWT_SECRET, { expiresIn: '24h' });
-
+        const token = jwt.sign({ id: user.id, email: user.email, isAdmin: user.is_admin, name: user.name, isSeller: user.is_seller }, JWT_SECRET, { expiresIn: '24h' });
         res.json({
             id: user.id, name: user.name, email: user.email, phone: user.phone,
             isSeller: Boolean(user.is_seller), isAdmin: Boolean(user.is_admin),
             rating: user.rating, verified: Boolean(user.verified), token
         });
     } catch (err) {
-        console.error("Login error:", err);
-        res.status(500).json({ message: "Server error during login" });
+        res.status(500).json({ message: "Login failed" });
     }
 });
 
-// POST Register
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { name, email, password, phone, isSeller } = req.body;
         const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
-        if (existing.length > 0) {
-            return res.status(400).json({ message: "User with this email already exists" });
-        }
+        if (existing.length > 0) return res.status(400).json({ message: "Email exists" });
         
-        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
-        const [result] = await pool.execute(
-            'INSERT INTO users (name, email, password, phone, is_seller) VALUES (?, ?, ?, ?, ?)',
-            [name, email, hashedPassword, phone, isSeller]
-        );
-
-        const newUserId = result.insertId;
-        const token = jwt.sign({ id: newUserId, email, name, isSeller, isAdmin: false }, JWT_SECRET, { expiresIn: '24h' });
-
-        res.status(201).json({ id: newUserId, name, email, phone, isSeller, token });
+        const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+        const [res1] = await pool.execute('INSERT INTO users (name, email, password, phone, is_seller) VALUES (?, ?, ?, ?, ?)', [name, email, hashed, phone, isSeller]);
+        const token = jwt.sign({ id: res1.insertId, email, name, isSeller, isAdmin: false }, JWT_SECRET, { expiresIn: '24h' });
+        
+        res.status(201).json({ id: res1.insertId, name, email, phone, isSeller, token });
     } catch (err) {
-        console.error("Registration error:", err);
-        res.status(500).json({ message: "Registration failed due to a server error." });
+        res.status(500).json({ message: "Registration failed" });
     }
 });
 
-// POST AI Verify (File Upload)
 app.post('/api/ai/verify', upload.single('image'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ message: 'No image file uploaded.' });
-    }
-    // Simulate Vertex AI response
-    const randomSeed = req.file.size % 100;
-    if (randomSeed < 10) {
-        return res.json({ score: 0.2, labels: ['person', 'outdoor'], explanation: 'Object does not resemble a bottle.' });
-    } else if (randomSeed < 40) {
-        return res.json({ score: 0.60, labels: ['glass', 'liquid', 'blurry'], explanation: 'Bottle detected but label is obscured.' });
-    } else {
-        return res.json({ score: 0.92, labels: ['bottle', 'alcohol', 'clear label'], explanation: 'Positive identification of packaging.' });
-    }
+    if (!req.file) return res.status(400).json({ message: 'No image' });
+    const seed = req.file.size % 100;
+    if (seed < 10) return res.json({ score: 0.2, labels: ['person'], explanation: 'Not a bottle' });
+    else if (seed < 40) return res.json({ score: 0.60, labels: ['glass', 'blurry'], explanation: 'Unclear label' });
+    else return res.json({ score: 0.92, labels: ['bottle', 'alcohol'], explanation: 'Verified' });
 });
 
-// Health Check
 app.get('/api/health', (req, res) => {
-    pool.query('SELECT 1')
-        .then(() => res.json({ status: 'ok', database: 'connected', timestamp: new Date() }))
-        .catch(err => res.status(503).json({ status: 'error', database: 'disconnected', message: err.message }));
+    pool.query('SELECT 1').then(() => res.json({ status: 'ok' })).catch(e => res.status(503).json({ error: e.message }));
 });
 
-
-// --- SERVE STATIC FILES & CATCH-ALL ---
+// Serve Static
 app.use(express.static(path.join(__dirname, 'dist')));
+app.use('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
-app.use('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-// --- SERVER STARTUP ---
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     initDB();

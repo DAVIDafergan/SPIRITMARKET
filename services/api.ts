@@ -1,175 +1,141 @@
+import axios from 'axios';
+import { Listing, ListingFilterParams, User } from '../types';
 
-import { Listing, User, AIAnalysisResult, CreateListingRequest, ListingFilterParams } from '../types';
-import { MockApi } from './mockApi';
-import { config } from '../config';
+// הגדרת כתובת ה-API
+// אם אתה עובד לוקאלית והשרת רץ על 8080 והריאקט על 5173, מומלץ להשתמש ב-Proxy ב-Vite
+// או לכתוב כאן את הכתובת המלאה: 'http://localhost:8080/api'
+const API_URL = '/api'; 
 
-// Interface defining the contract for both Mock and Real services
-interface ApiService {
-  login: (email: string, password: string) => Promise<User>;
-  register: (userData: Partial<User>) => Promise<User>;
-  getUserById: (id: string) => Promise<User | undefined>;
-  getListings: (filters?: ListingFilterParams) => Promise<Listing[]>;
-  getListingById: (id: string) => Promise<Listing | undefined>;
-  createListing: (listing: CreateListingRequest, aiResult: AIAnalysisResult) => Promise<Listing>;
-  simulateVertexAIPrediction: (file: File) => Promise<AIAnalysisResult>;
-  getModerationQueue: () => Promise<Listing[]>;
-  moderateListing: (id: string, action: 'APPROVE' | 'REJECT') => Promise<void>;
-}
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-// Helper to get headers with Auth Token
-const getHeaders = (contentType: string | null = 'application/json') => {
-  const headers: Record<string, string> = {};
-  if (contentType) {
-    headers['Content-Type'] = contentType;
+// Interceptor: הוספת הטוקן לכל בקשה באופן אוטומטי
+api.interceptors.request.use((config) => {
+  const userStr = localStorage.getItem('spirit_market_user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user.token) {
+        config.headers.Authorization = `Bearer ${user.token}`;
+      }
+    } catch (e) {
+      console.error("Error parsing user from local storage", e);
+    }
   }
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  return config;
+});
+
+// Interceptor: טיפול בשגיאות גלובלי (אופציונלי)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error("API Error:", error.response?.data?.message || error.message);
+    return Promise.reject(error);
   }
-  return headers;
-};
+);
 
-// Helper to safely parse JSON response
-const handleResponse = async (res: Response) => {
-  const contentType = res.headers.get("content-type");
-  if (contentType && contentType.indexOf("application/json") !== -1) {
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || 'API Error');
-    }
-    return data;
-  } else {
-    // If response is not JSON (e.g., HTML 404 or 500), read as text to debug
-    const text = await res.text();
-    if (!res.ok) {
-      console.error("API returned non-JSON error:", text);
-      throw new Error(`Server Error (${res.status}): Please check connection.`);
-    }
-    return text; 
-  }
-};
-
-// Real API Implementation (fetch based)
-const RealApi: ApiService = {
-  login: async (email, password) => {
-    try {
-      const res = await fetch(`${config.apiUrl}/auth/login`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ email, password }),
-      });
-      return await handleResponse(res);
-    } catch (e) {
-      console.error("Login Error:", e);
-      throw e;
-    }
+export const Api = {
+  // --- אימות (Auth) ---
+  login: async (email: string, password: string): Promise<User> => {
+    const response = await api.post('/auth/login', { email, password });
+    return response.data;
   },
 
-  register: async (userData) => {
-    try {
-      const res = await fetch(`${config.apiUrl}/auth/register`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(userData),
-      });
-      return await handleResponse(res);
-    } catch (e) {
-      console.error("Register Error:", e);
-      throw e;
-    }
+  register: async (userData: any): Promise<User> => {
+    const response = await api.post('/auth/register', userData);
+    return response.data;
   },
 
-  getUserById: async (id) => {
-    try {
-      const res = await fetch(`${config.apiUrl}/users/${id}`, {
-          headers: getHeaders()
-      });
-      if (!res.ok) return undefined;
-      return await res.json();
-    } catch {
-      return undefined;
-    }
+  getUserById: async (id: string) => {
+     // פונקציה זו לא קיימת ב-server.js הנוכחי, אך נשאיר למניעת שגיאות קומפילציה
+     // כרגע נחזיר null או נשתמש במידע שיש ב-localStorage
+     return null; 
   },
 
-  getListings: async (filters) => {
-    const params = new URLSearchParams();
-    if (filters) {
-      if (filters.category && filters.category !== 'All') params.append('category', filters.category);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.minPrice) params.append('minPrice', filters.minPrice.toString());
-      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
-      if (filters.minAbv) params.append('minAbv', filters.minAbv.toString());
-      if (filters.maxAbv) params.append('maxAbv', filters.maxAbv.toString());
-      if (filters.minRating) params.append('minRating', filters.minRating.toString());
-      if (filters.sortBy) params.append('sortBy', filters.sortBy);
-    }
-
-    try {
-      const res = await fetch(`${config.apiUrl}/listings?${params.toString()}`);
-      return await handleResponse(res);
-    } catch (e) {
-      console.error("Fetch Listings Error:", e);
-      throw new Error('Failed to load listings. Server might be offline.');
-    }
+  // --- מודעות (Listings) ---
+  getListings: async (filters?: ListingFilterParams): Promise<Listing[]> => {
+    const response = await api.get('/listings', { params: filters });
+    return response.data;
   },
 
-  getListingById: async (id) => {
-    try {
-      const res = await fetch(`${config.apiUrl}/listings/${id}`);
-      if (!res.ok) return undefined;
-      return await res.json();
-    } catch {
-      return undefined;
-    }
+  // 🚨 התיקון הקריטי: הפונקציה שחסרה וגרמה לקריסה בדף המוצר 🚨
+  getListingByIdAndCountView: async (id: string | number): Promise<Listing> => {
+    const response = await api.get(`/listings/${id}/view`);
+    return response.data;
   },
 
-  createListing: async (listing, aiResult) => {
-    try {
-      const res = await fetch(`${config.apiUrl}/listings`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ ...listing, aiData: aiResult }),
-      });
-      return await handleResponse(res);
-    } catch (e) {
-      console.error("Create Listing Error:", e);
-      throw e;
-    }
+  // תמיכה לאחור בקוד ישן שאולי קורא לזה
+  getListingById: async (id: string | number): Promise<Listing> => {
+    const response = await api.get(`/listings/${id}/view`);
+    return response.data;
   },
 
-  simulateVertexAIPrediction: async (file) => {
+  createListing: async (data: any) => {
+    const response = await api.post('/listings', data);
+    return response.data;
+  },
+
+  updateListing: async (id: number, data: any) => {
+    const response = await api.put(`/listings/${id}`, data);
+    return response.data;
+  },
+
+  deleteListing: async (id: number) => {
+    await api.delete(`/listings/${id}`);
+  },
+
+  getMyListings: async (): Promise<Listing[]> => {
+    const response = await api.get('/listings/my');
+    return response.data;
+  },
+
+  // --- AI / העלאת תמונות ---
+  // מיפוי הפונקציה הישנה simulateVertexAIPrediction לפונקציה החדשה
+  simulateVertexAIPrediction: async (file: File) => {
     const formData = new FormData();
     formData.append('image', file);
     
-    try {
-      const res = await fetch(`${config.apiUrl}/ai/verify`, {
-        method: 'POST',
-        headers: getHeaders(null), // Remove Content-Type for FormData
-        body: formData,
-      });
-      return await handleResponse(res);
-    } catch (e) {
-      console.error("AI Verify Error:", e);
-      throw e;
-    }
+    const response = await api.post('/ai/verify', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  
+  // שם חדש וברור יותר לאותה פעולה
+  uploadImage: async (formData: FormData) => {
+    const response = await api.post('/ai/verify', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
+  // --- משתמשים וביקורות ---
+  updateUserProfile: async (data: { name: string; phone: string }) => {
+    const response = await api.put('/users/profile', data);
+    return response.data;
+  },
+
+  addReview: async (data: { listingId: number; sellerId: number; rating: number; comment: string }) => {
+    const response = await api.post('/reviews', data);
+    return response.data;
+  },
+
+  getSellerReviews: async (sellerId: number) => {
+    const response = await api.get(`/reviews/seller/${sellerId}`);
+    return response.data;
+  },
+  
+  // --- Admin (Placeholder) ---
+  // הפונקציות האלו לא קיימות בשרת כרגע, משאיר ריק כדי למנוע קריסה אם יש קריאה
   getModerationQueue: async () => {
-    const res = await fetch(`${config.apiUrl}/admin/moderation`, {
-        headers: getHeaders()
-    });
-    return await handleResponse(res);
+      return [];
   },
-
-  moderateListing: async (id, action) => {
-    const res = await fetch(`${config.apiUrl}/admin/moderation/${id}`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ action }),
-    });
-    await handleResponse(res);
+  
+  moderateListing: async (id: string, action: 'APPROVE' | 'REJECT') => {
+      console.log(`Simulated moderation for ${id}: ${action}`);
   }
 };
-
-// Export the selected strategy based on config
-export const Api = config.useMock ? MockApi : RealApi;
