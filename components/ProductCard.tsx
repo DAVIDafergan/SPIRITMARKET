@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, ShieldCheck, Heart, Droplets, Star } from 'lucide-react';
+import { MapPin, ShieldCheck, Droplets, Star } from 'lucide-react';
 import { Listing } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -9,19 +9,25 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
-  // **התיקון הקריטי:** אם המודעה לא קיימת, אל תמשיך לרנדר
-  if (!listing || !listing.id) {
+  // **בדיקת בטיחות חזקה:** אם חסר מודעה או נתון מפתח, אל תרנדר
+  if (!listing || !listing.id || !listing.title) {
     return null; 
   }
 
   const { t, language } = useLanguage();
+  
+  // נקיון והגנה על נתונים
+  const displayAbv = listing.abv ? listing.abv : 0;
+  const displayPrice = listing.price ? listing.price.toLocaleString() : 'N/A';
+  const displayRating = listing.sellerRating ? listing.sellerRating.toFixed(1) : '0.0';
+
 
   return (
     <Link to={`/listing/${listing.id}`} className="group bg-charcoal-900 rounded-2xl border border-gold-900/20 shadow-lg hover:shadow-gold-900/10 hover:-translate-y-2 transition-all duration-300 overflow-hidden flex flex-col h-full relative">
       {/* Image Container */}
       <div className="relative aspect-[3/4] overflow-hidden">
         <img 
-          src={listing.imageUrl} 
+          src={listing.imageUrl || '/placeholder-bottle.jpg'}
           alt={listing.title}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
           loading="lazy"
@@ -32,7 +38,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
         <div className={`absolute top-4 bg-gold-400/95 backdrop-blur-sm px-2.5 py-1 rounded-md text-xs font-bold text-gold-900 shadow-md flex items-center gap-1.5 ${language === 'he' ? 'left-4' : 'right-4'}`}>
           <ShieldCheck size={14} />
           {t.listing.verified}
-          {/* הוספת בדיקות בטיחות נוספות לשדות חדשים */}
         </div>
 
         {/* ABV & Price (Bottom Overlay) */}
@@ -40,9 +45,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
           <div className='flex items-center justify-between'>
              <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-md text-xs">
                <Droplets size={12} />
-               <span>{listing.abv}% ABV</span>
+               <span>{displayAbv}% ABV</span>
              </div>
-             <span className="text-2xl font-bold">{t.listing.currency}{listing.price.toLocaleString()}</span>
+             <span className="text-2xl font-bold">{t.listing.currency}{displayPrice}</span>
           </div>
         </div>
       </div>
@@ -58,7 +63,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
              {listing.sellerRating && listing.sellerRating > 0 && (
                <div className="flex items-center gap-1 text-xs font-medium text-gold-400">
                  <Star size={12} className="fill-gold-400" />
-                 <span>{listing.sellerRating.toFixed(1)}</span>
+                 <span>{displayRating}</span>
                </div>
             )}
           </div>
@@ -71,7 +76,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
         <div className="mt-auto pt-4 flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-400 text-xs">
               <MapPin size={12} className="flex-shrink-0" />
-              <span className="truncate">{listing.location}</span>
+              <span className="truncate">{listing.location || 'N/A'}</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-charcoal-800 flex items-center justify-center group-hover:bg-gold-500 group-hover:text-charcoal-950 transition-colors duration-300 text-gold-400 font-bold">
              <span>{language === 'he' ? '←' : '→'}</span>

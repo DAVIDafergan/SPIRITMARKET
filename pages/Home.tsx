@@ -206,7 +206,7 @@ const Home: React.FC = () => {
               {listings.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                   {listings
-                      .filter(listing => listing && listing.id) // **הוספת הפילטור הקריטי**
+                      .filter(listing => listing && listing.id) // הוספת הפילטור הקריטי
                       .map((listing, i) => (
                     <div key={listing.id} style={{ animationDelay: `${i * 100}ms` }} className="animate-fade-in-up">
                         <ProductCard listing={listing} />
