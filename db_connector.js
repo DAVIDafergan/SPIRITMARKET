@@ -2,36 +2,45 @@
 import mysql from 'mysql2/promise';
 import * as dotenv from 'dotenv';
 
-// Load environment variables (Railway sets them automatically)
+// load .env.local if exists (local dev)
+dotenv.config({ path: './.env.local' });
+// load real env (Railway)
 dotenv.config();
 
-// DB configuration from Railway
-const DB_USER = process.env.MYSQLUSER || 'root';
-const DB_PASS = process.env.MYSQLPASSWORD || 'stOrhLwjOHJhKxtEgaQSGSCSbCTlFqfx';
-const DB_NAME = process.env.MYSQLDATABASE || 'railway';
-const DB_HOST = process.env.MYSQLHOST || 'mysql.railway.internal';
-const DB_PORT = process.env.MYSQLPORT || 3306;
+// --- RAILWAY VARIABLES --- //
+const DB_USER = process.env.MYSQLUSER;
+const DB_PASS = process.env.MYSQLPASSWORD;
+const DB_NAME = process.env.MYSQLDATABASE;
+const DB_HOST = process.env.MYSQLHOST;
+const DB_PORT = process.env.MYSQLPORT;
 
-// Create a connection pool
+// FALLBACKS (LOCAL DEV)
+const user = DB_USER || 'root';
+const pass = DB_PASS || 'password123';
+const name = DB_NAME || 'spiritmarket';
+const host = DB_HOST || '127.0.0.1';
+const port = DB_PORT || 3306;
+
+// Create connection pool
 const pool = mysql.createPool({
-    host: DB_HOST,
-    port: DB_PORT,
-    user: DB_USER,
-    password: DB_PASS,
-    database: DB_NAME,
+    host,
+    port,
+    user,
+    password: pass,
+    database: name,
     dateStrings: true,
     connectionLimit: 10
 });
 
-// Test the connection on startup
+// Test DB connection
 pool.getConnection()
     .then(conn => {
-        console.log(`Successfully connected to database '${DB_NAME}' as user '${DB_USER}'`);
+        console.log(`Connected to DB '${name}' as user '${user}'`);
         conn.release();
     })
     .catch(err => {
-        console.error("Failed to connect to database. Check credentials and connection type.");
-        console.error("Error:", err.message);
+        console.error('❌ Failed to connect to DB');
+        console.error(err.message);
     });
 
 export default pool;
