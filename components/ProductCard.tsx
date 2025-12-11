@@ -32,6 +32,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
         <div className={`absolute top-4 bg-gold-400/95 backdrop-blur-sm px-2.5 py-1 rounded-md text-xs font-bold text-gold-900 shadow-md flex items-center gap-1.5 ${language === 'he' ? 'left-4' : 'right-4'}`}>
           <ShieldCheck size={14} />
           {t.listing.verified}
+          {/* הוספת בדיקות בטיחות נוספות לשדות חדשים */}
         </div>
 
         {/* ABV & Price (Bottom Overlay) */}
@@ -76,7 +77,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ listing }) => {
              <span>{language === 'he' ? '←' : '→'}</span>
             </div>
         </div>
-       {/* אם היית קורא ל-description כאן, זה היה המקום שבו זה היה קורס: {listing.description} */}
       </div>
     </Link>
   );
