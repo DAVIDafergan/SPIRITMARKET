@@ -214,7 +214,6 @@ const CreateListing: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-300 mb-2">{field.label}</label>
                 {field.type === 'select' ? (
                   <select name="category" value={formData.category} onChange={handleChange} className="w-full border border-gold-900/20 bg-charcoal-800 rounded-xl p-4 focus:bg-charcoal-900 focus:ring-2 focus:ring-gold-500/30 focus:border-gold-500 outline-none transition-all font-medium text-gray-200">
-                    {/* שינוי כאן: שימוש במערך categories המיוצא */}
                     {categories.map(c => <option key={c} value={c}>{t.filters.categories[c] || c}</option>)} 
                   </select>
                 ) : (
@@ -250,6 +249,7 @@ const CreateListing: React.FC = () => {
           </div>
         </form>
       </div>
+      
     </div>
   );
 };
