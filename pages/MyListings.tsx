@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // **התיקון כאן**
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Edit, Trash2, X, AlertTriangle, Loader2, PlusCircle, Eye } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';

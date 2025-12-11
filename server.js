@@ -37,61 +37,61 @@ const initDB = async () => {
             const connection = await pool.getConnection();
             console.log("Acquired connection for initialization...");
             
-            // Users Table (No Change, rating is updated separately)
+            // Users Table (Whitespace cleaned)
             await connection.query(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    email VARCHAR(255) NOT NULL UNIQUE,
-                    password VARCHAR(255) NOT NULL,
-                    phone VARCHAR(50),
-                    is_seller BOOLEAN DEFAULT FALSE,
-                    is_admin BOOLEAN DEFAULT FALSE,
-                    verified BOOLEAN DEFAULT FALSE,
-                    rating FLOAT DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    phone VARCHAR(50),
+    is_seller BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    verified BOOLEAN DEFAULT FALSE,
+    rating FLOAT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+`);
 
-            // Listings Table (Added view_count)
+            // Listings Table (Whitespace cleaned)
             await connection.query(`
-                CREATE TABLE IF NOT EXISTS listings (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    seller_id INT NOT NULL,
-                    title VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    price DECIMAL(10, 2) NOT NULL,
-                    category VARCHAR(50),
-                    image_url TEXT,
-                    location VARCHAR(255),
-                    abv DECIMAL(5, 2),
-                    volume_ml INT,
-                    brand VARCHAR(255),
-                    vintage INT,
-                    is_kosher BOOLEAN DEFAULT FALSE,
-                    status VARCHAR(50) DEFAULT 'PENDING',
-                    ai_data JSON,
-                    view_count INT DEFAULT 0, -- **חדש: מניית צפיות**
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            `);
-            
-            // Reviews Table (**חדש: דירוג וביקורות**)
-            await connection.query(`
-                CREATE TABLE IF NOT EXISTS reviews (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    listing_id INT NOT NULL,
-                    seller_id INT NOT NULL,
-                    reviewer_id INT NOT NULL,
-                    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-                    comment TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
-                    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            `);
+CREATE TABLE IF NOT EXISTS listings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    category VARCHAR(50),
+    image_url TEXT,
+    location VARCHAR(255),
+    abv DECIMAL(5, 2),
+    volume_ml INT,
+    brand VARCHAR(255),
+    vintage INT,
+    is_kosher BOOLEAN DEFAULT FALSE,
+    status VARCHAR(50) DEFAULT 'PENDING',
+    ai_data JSON,
+    view_count INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+)
+`);
+            
+            // Reviews Table (Whitespace cleaned)
+            await connection.query(`
+CREATE TABLE IF NOT EXISTS reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    listing_id INT NOT NULL,
+    seller_id INT NOT NULL,
+    reviewer_id INT NOT NULL,
+    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
+    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
+)
+`);
 
             console.log("Database tables initialized successfully. (Updated for Reviews/Views)");
             connection.release();
@@ -122,7 +122,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- API Routes ---
 
-// 1. GET Listings (Home Page) - ללא שינוי מהותי
+// 1. GET Listings (Home Page)
 app.get('/api/listings', async (req, res) => {
     try {
         const { category, search, minPrice, maxPrice, minAbv, maxAbv, minRating, sortBy } = req.query;
@@ -161,7 +161,7 @@ app.get('/api/listings', async (req, res) => {
             isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
             sellerName: row.sellerName, sellerPhone: row.sellerPhone,
             sellerRating: row.sellerRating, sellerVerified: Boolean(row.sellerVerified),
-                viewCount: row.view_count, // **חדש**
+            viewCount: row.view_count, // **חדש**
             aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
         }));
 
@@ -173,7 +173,7 @@ app.get('/api/listings', async (req, res) => {
 });
 
 
-// 2. POST Create Listing (Protected) - ללא שינוי מהותי
+// 2. POST Create Listing (Protected)
 app.post('/api/listings', authenticateToken, async (req, res) => {
     try {
         const { 
@@ -205,68 +205,33 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
 
 // 3. GET Listing by ID & Count View (**חדש: מניית צפיות**)
 app.get('/api/listings/:id/view', async (req, res) => {
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
 
-        const { id } = req.params;
+        const { id } = req.params;
 
-        // 1. עדכן את מונה הצפיות (אם המודעה מאושרת)
-        await conn.query(`
-            UPDATE listings
-            SET view_count = view_count + 1
-            WHERE id = ? AND status = 'APPROVED'
-        `, [id]);
-        
-        // 2. שלוף את נתוני המודעה המלאים (כולל מונה מעודכן)
-        const [rows] = await conn.execute(`
-            SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
-            FROM listings l
-            JOIN users u ON l.seller_id = u.id
-            WHERE l.id = ?
-        `, [id]);
-        
-        await conn.commit();
-        
-        if (rows.length === 0) return res.status(404).json({ message: 'Listing Not Found' });
+        // 1. עדכן את מונה הצפיות (אם המודעה מאושרת)
+        await conn.query(`
+            UPDATE listings
+            SET view_count = view_count + 1
+            WHERE id = ? AND status = 'APPROVED'
+        `, [id]);
+        
+        // 2. שלוף את נתוני המודעה המלאים (כולל מונה מעודכן)
+        const [rows] = await conn.execute(`
+            SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
+            FROM listings l
+            JOIN users u ON l.seller_id = u.id
+            WHERE l.id = ?
+        `, [id]);
+        
+        await conn.commit();
+        
+        if (rows.length === 0) return res.status(404).json({ message: 'Listing Not Found' });
 
-        const row = rows[0];
-        res.json({
-            id: row.id,
-            title: row.title, description: row.description, price: row.price,
-            category: row.category, imageUrl: row.image_url, status: row.status,
-            createdAt: row.created_at, location: row.location, abv: row.abv,
-            volumeMl: row.volume_ml, brand: row.brand, vintage: row.vintage,
-            isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
-            sellerName: row.sellerName, sellerPhone: row.sellerPhone,
-            sellerRating: row.sellerRating, sellerVerified: Boolean(row.sellerVerified),
-            viewCount: row.view_count, // **חדש**
-            aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
-        });
-    } catch (err) {
-        await conn.rollback();
-        console.error("Error fetching listing by ID and counting view:", err);
-        res.status(500).json({ message: "Server error" });
-    } finally {
-        conn.release();
-    }
-});
-
-// 4. GET My Listings (**חדש: המודעות שלי**)
-app.get('/api/listings/my', authenticateToken, async (req, res) => {
-    try {
-        const sellerId = req.user.id;
-        const sql = `
-            SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
-            FROM listings l
-            JOIN users u ON l.seller_id = u.id
-            WHERE l.seller_id = ?
-            ORDER BY l.created_at DESC
-        `;
-        
-        const [rows] = await pool.execute(sql, [sellerId]);
-
-        const formattedListings = rows.map(row => ({
+        const row = rows[0];
+        res.json({
             id: row.id,
             title: row.title, description: row.description, price: row.price,
             category: row.category, imageUrl: row.image_url, status: row.status,
@@ -275,210 +240,245 @@ app.get('/api/listings/my', authenticateToken, async (req, res) => {
             isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
             sellerName: row.sellerName, sellerPhone: row.sellerPhone,
             sellerRating: row.sellerRating, sellerVerified: Boolean(row.sellerVerified),
-            viewCount: row.view_count, // **חדש**
+            viewCount: row.view_count, // **חדש**
+            aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
+        });
+    } catch (err) {
+        await conn.rollback();
+        console.error("Error fetching listing by ID and counting view:", err);
+        res.status(500).json({ message: "Server error" });
+    } finally {
+        conn.release();
+    }
+});
+
+// 4. GET My Listings (**חדש: המודעות שלי**)
+app.get('/api/listings/my', authenticateToken, async (req, res) => {
+    try {
+        const sellerId = req.user.id;
+        const sql = `
+            SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
+            FROM listings l
+            JOIN users u ON l.seller_id = u.id
+            WHERE l.seller_id = ?
+            ORDER BY l.created_at DESC
+        `;
+        
+        const [rows] = await pool.execute(sql, [sellerId]);
+
+        const formattedListings = rows.map(row => ({
+            id: row.id,
+            title: row.title, description: row.description, price: row.price,
+            category: row.category, imageUrl: row.image_url, status: row.status,
+            createdAt: row.created_at, location: row.location, abv: row.abv,
+            volumeMl: row.volume_ml, brand: row.brand, vintage: row.vintage,
+            isKosher: Boolean(row.is_kosher), sellerId: row.seller_id,
+            sellerName: row.sellerName, sellerPhone: row.sellerPhone,
+            sellerRating: row.sellerRating, sellerVerified: Boolean(row.sellerVerified),
+            viewCount: row.view_count, // **חדש**
             aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
         }));
 
-        res.json(formattedListings);
-    } catch (err) {
-        console.error("Error fetching my listings:", err);
-        res.status(500).json({ message: "Failed to load listings" });
-    }
+        res.json(formattedListings);
+    } catch (err) {
+        console.error("Error fetching my listings:", err);
+        res.status(500).json({ message: "Failed to load listings" });
+    }
 });
 
 // 5. PUT Update Listing (**חדש: עריכת מודעה**)
 app.put('/api/listings/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const sellerId = req.user.id;
-        const { title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher } = req.body;
-        
-        // ודא שהמשתמש הוא הבעלים של המודעה
-        const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
-        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
-            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
-        }
+    try {
+        const { id } = req.params;
+        const sellerId = req.user.id;
+        const { title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher } = req.body;
+        
+        // ודא שהמשתמש הוא הבעלים של המודעה
+        const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
+        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
+            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
+        }
 
-        const query = `
-            UPDATE listings
-            SET title = ?, description = ?, price = ?, category = ?, location = ?, abv = ?, volume_ml = ?, brand = ?, vintage = ?, is_kosher = ?
-            WHERE id = ?
-        `;
+        const query = `
+            UPDATE listings
+            SET title = ?, description = ?, price = ?, category = ?, location = ?, abv = ?, volume_ml = ?, brand = ?, vintage = ?, is_kosher = ?
+            WHERE id = ?
+        `;
 
-        await pool.execute(query, [
-            title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher, id
-        ]);
+        await pool.execute(query, [
+            title, description, price, category, location, abv, volumeMl, brand, vintage, isKosher, id
+        ]);
 
-        res.json({ message: "Listing updated successfully" });
-    } catch (err) {
-        console.error("Error updating listing:", err);
-        res.status(500).json({ message: "Failed to update listing" });
-    }
+        res.json({ message: "Listing updated successfully" });
+    } catch (err) {
+        console.error("Error updating listing:", err);
+        res.status(500).json({ message: "Failed to update listing" });
+    }
 });
 
 // 6. DELETE Listing (**חדש: מחיקת מודעה**)
 app.delete('/api/listings/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const sellerId = req.user.id;
+    try {
+        const { id } = req.params;
+        const sellerId = req.user.id;
 
-        // ודא שהמשתמש הוא הבעלים של המודעה
-        const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
-        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
-            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
-        }
+        // ודא שהמשתמש הוא הבעלים של המודעה
+        const [listingCheck] = await pool.execute('SELECT seller_id FROM listings WHERE id = ?', [id]);
+        if (listingCheck.length === 0 || listingCheck[0].seller_id !== sellerId) {
+            return res.status(403).json({ message: "Forbidden: You do not own this listing." });
+        }
 
-        const [result] = await pool.execute('DELETE FROM listings WHERE id = ?', [id]);
-        
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Listing not found" });
-        }
+        const [result] = await pool.execute('DELETE FROM listings WHERE id = ?', [id]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "Listing not found" });
+        }
 
-        res.status(204).send(); // No Content, successful deletion
-    } catch (err) {
-        console.error("Error deleting listing:", err);
-        res.status(500).json({ message: "Failed to delete listing" });
-    }
+        res.status(204).send(); // No Content, successful deletion
+    } catch (err) {
+        console.error("Error deleting listing:", err);
+        res.status(500).json({ message: "Failed to delete listing" });
+    }
 });
 
 
 // 7. PUT Update User Profile (**חדש: עדכון פרטי משתמש**)
 app.put('/api/users/profile', authenticateToken, async (req, res) => {
-    const conn = await pool.getConnection();
-    try {
-        const userId = req.user.id;
-        const { name, phone } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        const userId = req.user.id;
+        const { name, phone } = req.body;
 
-        if (!name || !phone) {
-            return res.status(400).json({ message: "Name and phone are required." });
-        }
+        if (!name || !phone) {
+            return res.status(400).json({ message: "Name and phone are required." });
+        }
 
-        await conn.execute(
-            'UPDATE users SET name = ?, phone = ? WHERE id = ?',
-            [name, phone, userId]
-        );
-        
-        // שליפת המשתמש המעודכן
-        const [rows] = await conn.execute('SELECT * FROM users WHERE id = ?', [userId]);
-        const user = rows[0];
+        await conn.execute(
+            'UPDATE users SET name = ?, phone = ? WHERE id = ?',
+            [name, phone, userId]
+        );
+        
+        // שליפת המשתמש המעודכן
+        const [rows] = await conn.execute('SELECT * FROM users WHERE id = ?', [userId]);
+        const user = rows[0];
 
-        res.json({
-            id: user.id, name: user.name, email: user.email, phone: user.phone,
+        res.json({
+            id: user.id, name: user.name, email: user.email, phone: user.phone,
             isSeller: Boolean(user.is_seller), isAdmin: Boolean(user.is_admin),
             rating: user.rating, verified: Boolean(user.verified)
-        });
+        });
 
-    } catch (err) {
-        console.error("Error updating user profile:", err);
-        res.status(500).json({ message: "Failed to update profile." });
-    } finally {
-        conn.release();
-    }
+    } catch (err) {
+        console.error("Error updating user profile:", err);
+        res.status(500).json({ message: "Failed to update profile." });
+    } finally {
+        conn.release();
+    }
 });
 
 
 // 8. POST Add Review and Rate Seller (**חדש: דירוג וביקורת**)
 app.post('/api/reviews', authenticateToken, async (req, res) => {
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
 
-        const reviewerId = req.user.id;
-        const { listingId, sellerId, rating, comment } = req.body;
-        
-        // 1. ודא שהמוצר והמוכר קיימים
-        const [listingRow] = await conn.execute('SELECT seller_id FROM listings WHERE id = ?', [listingId]);
-        if (listingRow.length === 0 || listingRow[0].seller_id != sellerId) {
-            await conn.rollback();
-            return res.status(400).json({ message: "Invalid listing or seller ID." });
-        }
-        
-        // ודא שהמשתמש לא מדרג את עצמו
-        if (reviewerId == sellerId) {
-            await conn.rollback();
-            return res.status(403).json({ message: "Cannot rate your own listing/seller profile." });
-        }
+        const reviewerId = req.user.id;
+        const { listingId, sellerId, rating, comment } = req.body;
+        
+        // 1. ודא שהמוצר והמוכר קיימים
+        const [listingRow] = await conn.execute('SELECT seller_id FROM listings WHERE id = ?', [listingId]);
+        if (listingRow.length === 0 || listingRow[0].seller_id !== sellerId) {
+            await conn.rollback();
+            return res.status(400).json({ message: "Invalid listing or seller ID." });
+        }
+        
+        // ודא שהמשתמש לא מדרג את עצמו
+        if (reviewerId == sellerId) {
+            await conn.rollback();
+            return res.status(403).json({ message: "Cannot rate your own listing/seller profile." });
+        }
 
-        // 2. הכנס ביקורת חדשה
-        const insertQuery = `
-            INSERT INTO reviews (listing_id, seller_id, reviewer_id, rating, comment)
-            VALUES (?, ?, ?, ?, ?)
-        `;
-        const [result] = await conn.execute(insertQuery, [listingId, sellerId, reviewerId, rating, comment]);
-        const newReviewId = result.insertId;
+        // 2. הכנס ביקורת חדשה
+        const insertQuery = `
+            INSERT INTO reviews (listing_id, seller_id, reviewer_id, rating, comment)
+            VALUES (?, ?, ?, ?, ?)
+        `;
+        const [result] = await conn.execute(insertQuery, [listingId, sellerId, reviewerId, rating, comment]);
+        const newReviewId = result.insertId;
 
-        // 3. עדכן את הדירוג הממוצע של המוכר בטבלת users
-        const [avgResult] = await conn.execute(
-            'SELECT AVG(rating) as avgRating FROM reviews WHERE seller_id = ?',
-            [sellerId]
-        );
-        const newAvgRating = parseFloat(avgResult[0].avgRating || 0).toFixed(1);
+        // 3. עדכן את הדירוג הממוצע של המוכר בטבלת users
+        const [avgResult] = await conn.execute(
+            'SELECT AVG(rating) as avgRating FROM reviews WHERE seller_id = ?',
+            [sellerId]
+        );
+        const newAvgRating = parseFloat(avgResult[0].avgRating || 0).toFixed(1);
 
-        await conn.execute(
-            'UPDATE users SET rating = ? WHERE id = ?',
-            [newAvgRating, sellerId]
-        );
-        
-        await conn.commit();
-        
-        // שליפת הביקורת המלאה להחזרה ל-Frontend
-        const [newReviewRow] = await conn.execute(`
-            SELECT r.*, u.name as reviewerName
-            FROM reviews r
-            JOIN users u ON r.reviewer_id = u.id
-            WHERE r.id = ?
-        `, [newReviewId]);
+        await conn.execute(
+            'UPDATE users SET rating = ? WHERE id = ?',
+            [newAvgRating, sellerId]
+        );
+        
+        await conn.commit();
+        
+        // שליפת הביקורת המלאה להחזרה ל-Frontend
+        const [newReviewRow] = await conn.execute(`
+            SELECT r.*, u.name as reviewerName
+            FROM reviews r
+            JOIN users u ON r.reviewer_id = u.id
+            WHERE r.id = ?
+        `, [newReviewId]);
 
 
-        res.status(201).json({ 
-            id: newReviewRow[0].id, 
-            listingId: newReviewRow[0].listing_id,
-            sellerId: newReviewRow[0].seller_id,
-            reviewerId: newReviewRow[0].reviewer_id,
-            reviewerName: newReviewRow[0].reviewerName,
-            rating: newReviewRow[0].rating,
-            comment: newReviewRow[0].comment,
-            createdAt: newReviewRow[0].created_at
-        });
+        res.status(201).json({ 
+            id: newReviewRow[0].id, 
+            listingId: newReviewRow[0].listing_id,
+            sellerId: newReviewRow[0].seller_id,
+            reviewerId: newReviewRow[0].reviewer_id,
+            reviewerName: newReviewRow[0].reviewerName,
+            rating: newReviewRow[0].rating,
+            comment: newReviewRow[0].comment,
+            createdAt: newReviewRow[0].created_at
+        });
 
-    } catch (err) {
-        await conn.rollback();
-        console.error("Error adding review:", err);
-        res.status(500).json({ message: "Failed to submit review" });
-    } finally {
-        conn.release();
-    }
+    } catch (err) {
+        await conn.rollback();
+        console.error("Error adding review:", err);
+        res.status(500).json({ message: "Failed to submit review" });
+    } finally {
+        conn.release();
+    }
 });
 
 // 9. GET Reviews by Seller ID (**חדש: שליפת ביקורות למוכר**)
 app.get('/api/reviews/seller/:sellerId', async (req, res) => {
-    try {
-        const { sellerId } = req.params;
-        const query = `
-            SELECT r.id, r.listing_id, r.seller_id, r.reviewer_id, r.rating, r.comment, r.created_at, u.name as reviewerName
-            FROM reviews r
-            JOIN users u ON r.reviewer_id = u.id
-            WHERE r.seller_id = ?
-            ORDER BY r.created_at DESC
-        `;
-        const [rows] = await pool.execute(query, [sellerId]);
+    try {
+        const { sellerId } = req.params;
+        const query = `
+            SELECT r.id, r.listing_id, r.seller_id, r.reviewer_id, r.rating, r.comment, r.created_at, u.name as reviewerName
+            FROM reviews r
+            JOIN users u ON r.reviewer_id = u.id
+            WHERE r.seller_id = ?
+            ORDER BY r.created_at DESC
+        `;
+        const [rows] = await pool.execute(query, [sellerId]);
 
-        const formattedReviews = rows.map(row => ({
-            id: row.id,
-            listingId: row.listing_id,
-            sellerId: row.seller_id,
-            reviewerId: row.reviewer_id,
-            reviewerName: row.reviewerName,
-            rating: row.rating,
-            comment: row.comment,
-            createdAt: row.created_at
-        }));
+        const formattedReviews = rows.map(row => ({
+            id: row.id,
+            listingId: row.listing_id,
+            sellerId: row.seller_id,
+            reviewerId: row.reviewer_id,
+            reviewerName: row.reviewerName,
+            rating: row.rating,
+            comment: row.comment,
+            createdAt: row.created_at
+        }));
 
-        res.json(formattedReviews);
-    } catch (err) {
-        console.error("Error fetching seller reviews:", err);
-        res.status(500).json({ message: "Failed to fetch reviews" });
-    }
+        res.json(formattedReviews);
+    } catch (err) {
+        console.error("Error fetching seller reviews:", err);
+        res.status(500).json({ message: "Failed to fetch reviews" });
+    }
 });
 
 
@@ -486,8 +486,8 @@ app.get('/api/reviews/seller/:sellerId', async (req, res) => {
 
 // POST Login - (ללא שינוי מהותי)
 app.post('/api/auth/login', async (req, res) => {
-    // ... קוד קיים ...
-    try {
+    // ... קוד קיים ...
+    try {
         const { email, password } = req.body;
         const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
 
@@ -515,13 +515,13 @@ app.post('/api/auth/login', async (req, res) => {
         console.error("Login error:", err);
         res.status(500).json({ message: "Server error during login" });
     }
-    // ... סוף קוד קיים ...
+    // ... סוף קוד קיים ...
 });
 
 // POST Register - (ללא שינוי מהותי)
 app.post('/api/auth/register', async (req, res) => {
-    // ... קוד קיים ...
-    try {
+    // ... קוד קיים ...
+    try {
         const { name, email, password, phone, isSeller } = req.body;
         const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
         if (existing.length > 0) {
@@ -543,13 +543,13 @@ app.post('/api/auth/register', async (req, res) => {
         console.error("Registration error:", err);
         res.status(500).json({ message: "Registration failed due to a server error." });
     }
-    // ... סוף קוד קיים ...
+    // ... סוף קוד קיים ...
 });
 
 // POST AI Verify (File Upload) - (ללא שינוי מהותי)
 app.post('/api/ai/verify', upload.single('image'), (req, res) => {
-    // ... קוד קיים ...
-    if (!req.file) {
+    // ... קוד קיים ...
+    if (!req.file) {
         return res.status(400).json({ message: 'No image file uploaded.' });
     }
     // Simulate Vertex AI response based on file size for demo purposes
@@ -561,16 +561,16 @@ app.post('/api/ai/verify', upload.single('image'), (req, res) => {
     } else {
         return res.json({ score: 0.92, labels: ['bottle', 'alcohol', 'clear label'], explanation: 'Positive identification of packaging.' });
     }
-    // ... סוף קוד קיים ...
+    // ... סוף קוד קיים ...
 });
 
 // Health Check - (ללא שינוי מהותי)
 app.get('/api/health', (req, res) => {
-    // ... קוד קיים ...
-    pool.query('SELECT 1')
+    // ... קוד קיים ...
+    pool.query('SELECT 1')
         .then(() => res.json({ status: 'ok', database: 'connected', timestamp: new Date() }))
         .catch(err => res.status(503).json({ status: 'error', database: 'disconnected', message: err.message }));
-    // ... סוף קוד קיים ...
+    // ... סוף קוד קיים ...
 });
 
 
