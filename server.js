@@ -154,6 +154,9 @@ app.get('/api/listings', async (req, res) => {
     }
 });
 
+
+
+
 // 2. POST Create Listing (Protected)
 app.post('/api/listings', authenticateToken, async (req, res) => {
     try {
@@ -183,6 +186,48 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
         res.status(500).json({ message: "Failed to create listing" });
     }
 });
+// GET Listing by ID
+app.get('/api/listings/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [rows] = await pool.execute(`
+            SELECT l.*, u.name as sellerName, u.phone as sellerPhone, u.rating as sellerRating, u.verified as sellerVerified
+            FROM listings l
+            JOIN users u ON l.seller_id = u.id
+            WHERE l.id = ?
+        `, [id]);
+
+        if (rows.length === 0) return res.status(404).json({ message: 'Listing Not Found' });
+
+        const row = rows[0];
+        res.json({
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            price: row.price,
+            category: row.category,
+            imageUrl: row.image_url,
+            status: row.status,
+            createdAt: row.created_at,
+            location: row.location,
+            abv: row.abv,
+            volumeMl: row.volume_ml,
+            brand: row.brand,
+            vintage: row.vintage,
+            isKosher: Boolean(row.is_kosher),
+            sellerId: row.seller_id,
+            sellerName: row.sellerName,
+            sellerPhone: row.sellerPhone,
+            sellerRating: row.sellerRating,
+            sellerVerified: Boolean(row.sellerVerified),
+            aiData: typeof row.ai_data === 'string' ? JSON.parse(row.ai_data) : row.ai_data
+        });
+    } catch (err) {
+        console.error("Error fetching listing by ID:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 
 // 3. POST Login
 app.post('/api/auth/login', async (req, res) => {
