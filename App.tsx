@@ -1,5 +1,6 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+// שינוי 1: שימוש ב-BrowserRouter במקום HashRouter
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 // Contexts
@@ -26,13 +27,12 @@ import EditListing from './pages/EditListing';
 // רכיב עזר להגנה על נתיבים (ProtectedRoute)
 // ------------------------------------------------------------------
 interface ProtectedRouteProps {
-  children: React.ReactNode; // שינוי: מקבל children במקום element
+  children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, isLoading } = useAuth(); // הוספת isLoading
+  const { user, isLoading } = useAuth();
 
-  // 1. אם אנחנו עדיין בודקים אם המשתמש מחובר, הצג טעינה
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -41,12 +41,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // 2. אם הבדיקה הסתיימה ואין משתמש, העבר ללוגין
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // 3. אם יש משתמש, הצג את התוכן המוגן
   return <>{children}</>;
 };
 
@@ -60,17 +58,16 @@ const App: React.FC = () => {
         <LanguageProvider>
           <AgeVerificationModal />
           <Router>
-            <Routes>
-              {/* Layout עוטף את כל הנתיבים באמצעות Outlet */}
-              <Route element={<Layout />}>
-                
+            {/* שינוי 2: ה-Layout עוטף את ה-Routes מבחוץ כדי שה-children יעברו נכון */}
+            <Layout>
+              <Routes>
                 {/* נתיבים פתוחים */}
                 <Route path="/" element={<Home />} />
                 <Route path="/listing/:id" element={<ProductDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 
-                {/* נתיבים מוגנים (עטופים ב-ProtectedRoute) */}
+                {/* נתיבים מוגנים */}
                 <Route 
                   path="/create" 
                   element={
@@ -111,9 +108,8 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } 
                 />
-
-              </Route>
-            </Routes>
+              </Routes>
+            </Layout>
           </Router>
         </LanguageProvider>
       </AuthProvider>
