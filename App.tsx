@@ -1,91 +1,124 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
+// Contexts
+import { LanguageProvider } from './contexts/LanguageContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
+
+// Components
 import Layout from './components/Layout';
+import { AgeVerificationModal } from './components/AgeVerificationModal';
+
+// Pages
 import Home from './pages/Home';
 import ProductDetail from './pages/ProductDetail';
 import CreateListing from './pages/CreateListing';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import { AgeVerificationModal } from './components/AgeVerificationModal';
-import { LanguageProvider } from './contexts/LanguageContext';
-import { AuthProvider, useAuth } from './contexts/AuthContext'; // ייבוא useAuth
-import { ToastProvider } from './contexts/ToastContext';
+import Account from './pages/Account';
+import MyListings from './pages/MyListings';
+import EditListing from './pages/EditListing';
 
 // ------------------------------------------------------------------
 // רכיב עזר להגנה על נתיבים (ProtectedRoute)
-// משתמש ב-useAuth כדי לבדוק אם המשתמש מחובר
 // ------------------------------------------------------------------
 interface ProtectedRouteProps {
-  element: React.ReactNode;
+  children: React.ReactNode; // שינוי: מקבל children במקום element
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element }) => {
-  const { user } = useAuth(); // שימוש ב-AuthContext לבדיקת המצב
-  
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { user, isLoading } = useAuth(); // הוספת isLoading
+
+  // 1. אם אנחנו עדיין בודקים אם המשתמש מחובר, הצג טעינה
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 text-gold-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // 2. אם הבדיקה הסתיימה ואין משתמש, העבר ללוגין
   if (!user) {
-    // אם המשתמש לא מחובר, נווט לדף ההתחברות (login)
-    // כדאי לשקול להעביר את הנתיב הנוכחי כפרמטר כדי לחזור אליו לאחר ההתחברות
     return <Navigate to="/login" replace />;
   }
-  
-  return <>{element}</>;
+
+  // 3. אם יש משתמש, הצג את התוכן המוגן
+  return <>{children}</>;
 };
 
 // ------------------------------------------------------------------
-// ייבוא דפים חדשים
+// האפליקציה הראשית
 // ------------------------------------------------------------------
-import Account from './pages/Account'; // דף דשבורד משתמש
-import MyListings from './pages/MyListings'; // דף ניהול ליסטינג
-import EditListing from './pages/EditListing'; // דף עריכת ליסטינג
-
 const App: React.FC = () => {
-  return (
-    <ToastProvider>
-      <AuthProvider>
-        <LanguageProvider>
-          <AgeVerificationModal />
-          <Router>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/listing/:id" element={<ProductDetail />} />
-                <Route path="/create" element={<CreateListing />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <LanguageProvider>
+          <AgeVerificationModal />
+          <Router>
+            <Routes>
+              {/* Layout עוטף את כל הנתיבים באמצעות Outlet */}
+              <Route element={<Layout />}>
                 
-                {/* ------------------------------------------------- */}
-                {/* ----------- נתיבים מוגנים (Private Routes) -------- */}
-                {/* ------------------------------------------------- */}
+                {/* נתיבים פתוחים */}
+                <Route path="/" element={<Home />} />
+                <Route path="/listing/:id" element={<ProductDetail />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
                 
-                {/* דף דשבורד משתמש - שינוי פרטים אישיים */}
+                {/* נתיבים מוגנים (עטופים ב-ProtectedRoute) */}
                 <Route 
-                    path="/account" 
-                    element={<ProtectedRoute element={<Account />} />} 
+                  path="/create" 
+                  element={
+                    <ProtectedRoute>
+                      <CreateListing />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/account" 
+                  element={
+                    <ProtectedRoute>
+                      <Account />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/my-listings" 
+                  element={
+                    <ProtectedRoute>
+                      <MyListings />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/edit-listing/:id" 
+                  element={
+                    <ProtectedRoute>
+                      <EditListing />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/admin" 
+                  element={
+                    <ProtectedRoute>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } 
                 />
 
-                {/* דף ניהול ליסטינג - עריכה ומחיקה */}
-                <Route 
-                    path="/my-listings" 
-                    element={<ProtectedRoute element={<MyListings />} />} 
-                />
-
-                {/* דף עריכת ליסטינג ספציפי */}
-                <Route 
-                    path="/edit-listing/:id" 
-                    element={<ProtectedRoute element={<EditListing />} />} 
-                />
-                
-                {/* ------------------------------------------------- */}
-
-              </Routes>
-            </Layout>
-          </Router>
-        </LanguageProvider>
-      </AuthProvider>
-    </ToastProvider>
-  );
+              </Route>
+            </Routes>
+          </Router>
+        </LanguageProvider>
+      </AuthProvider>
+    </ToastProvider>
+  );
 };
 
 export default App;
