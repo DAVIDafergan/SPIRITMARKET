@@ -93,12 +93,14 @@ const initDB = async () => {
                 )
             `);
 
-            // 🚨 FIX: Add view_count column if missing (For existing databases)
+            // ---------------------------------------------------------
+            // 🚨 תיקון קריטי: הוספת עמודת view_count אם היא חסרה 🚨
+            // ---------------------------------------------------------
             try {
                 await connection.query("ALTER TABLE listings ADD COLUMN view_count INT DEFAULT 0");
                 console.log("Running migration: Added 'view_count' column to listings table.");
             } catch (err) {
-                // Ignore if column already exists
+                // מתעלמים משגיאה אם העמודה כבר קיימת
                 if (err.code !== 'ER_DUP_FIELDNAME') {
                    // console.log("Note: view_count column check passed.");
                 }
