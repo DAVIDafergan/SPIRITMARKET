@@ -8,6 +8,7 @@ const API_URL = '/api';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 60000, // 👈 הוספתי: מחכה עד 60 שניות לפני שמתייאש
   headers: {
     'Content-Type': 'application/json',
   },
